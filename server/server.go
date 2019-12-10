@@ -29,6 +29,9 @@ type Server struct {
     phase int
     ticking *abool.AtomicBool
     stopTick chan bool
+    stopListen chan bool
+    stopServer chan bool
+    serverListener net.Listener
 }
 
 type client struct {
@@ -45,7 +48,9 @@ func CreateServer() *Server {
 	dconns: make(chan int),
 	msgs: make(chan msgFormat),
 	free_colors: list.New(),
-	stopTick: make(chan bool),
+	stopTick: make(chan bool, 1),
+	stopListen: make(chan bool, 1),
+	stopServer: make(chan bool, 1),
 	ticking: abool.New(),
     }
     // TODO support more player
@@ -81,7 +86,7 @@ func (b *Server) unsubscribe(p *client) {
 
 func (s *Server) Start(port string) {
     go s.hostServer(port)
-    for {
+    for stop:= false; !stop;{
         select {
         case conn := <-s.conns:
 	   go s.handleConnect(conn)
@@ -89,11 +94,11 @@ func (s *Server) Start(port string) {
 	   s.handleMessage(msg)
         case dconn := <-s.dconns:
 	   s.handleDisconnect(dconn)
-	   if len(s.players) < 1 {
-	       break
-	   }
+	case <-s.stopServer:
+	    stop = true
 	}
     }
+    fmt.Printf("Server shutdown\n");
 }
 
 func (s *Server) findById(id int) (*client, error) {
@@ -110,16 +115,17 @@ func (s *Server) ticker() {
     defer func() {
 	s.ticking.UnSet()
     }()
-    for {
+    for done:= false; !done; {
 	s.sendAllClients(`{"type" : "tick"}`, -1)
 	select {
 	case <-s.stopTick:
-	    fmt.Println("Ticking stopped")
-	    break
+	    fmt.Println("Ticking stopping")
+	    done = true
 	default:
     	    time.Sleep(50 * time.Millisecond)
     	}
     }
+    fmt.Println("Ticking stopped")
 }
 
 func (s *Server) handleMessage(mf msgFormat) {
@@ -185,9 +191,20 @@ func (s *Server) handleDisconnect(id int) {
     }
     s.unsubscribe(p)
     fmt.Printf("Client with id: %d disconnected\n", id)
-    if len(s.players) < 1 && s.ticking.IsSet() {
-	s.stopTick <- true
+
+    // shutdown server if no more player
+    if len(s.players) < 1 {
+	if s.ticking.IsSet() {
+	    s.stopTick <- true
+	}
+	s.shutdown()
     }
+}
+
+func (s *Server) shutdown() {
+    fmt.Printf("Initiating shutdown\n")
+    s.stopListen <- true // indicates normal close
+    s.serverListener.Close()
 }
 
 
@@ -250,18 +267,29 @@ func (s *Server) hostServer(port string) {
     fmt.Println("Start hosting server")
     PORT := ":" + port
     l, err := net.Listen("tcp4", PORT)
+    s.serverListener = l
     if err != nil {
 	fmt.Println(err.Error())
         return
     }
     defer l.Close()
 
-    for {
-        c, err := l.Accept()
+    for stop:= false; !stop; {
+	c, err := l.Accept()
+
         if err != nil {
-	    fmt.Println(err.Error())
-	    continue
+	    select {
+	    case <-s.stopListen:
+		fmt.Println("Stop listening")
+		stop = true
+	    default:
+		fmt.Printf("Error while listening: %s\n", err.Error())
+	    }
         }
-	s.conns <-c
+	if !stop {
+	    s.conns <-c
+	}
     }
+    s.stopServer <- true
 }
+
