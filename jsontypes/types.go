@@ -1,5 +1,9 @@
 package jsontypes
 
+type ColorData struct {
+    Type string `json:"type"`
+    Color string `json:"color"`
+}
 
 type ChatData struct {
     Type string `json:"type"`

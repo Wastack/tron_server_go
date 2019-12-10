@@ -41,7 +41,7 @@ type client struct {
     ready bool
 }
 
-func CreateServer() *Server {
+func Create() *Server {
     s := Server{
 	players: make([]*client, 0, 5),
 	conns: make(chan net.Conn),
@@ -140,7 +140,7 @@ func (s *Server) handleMessage(mf msgFormat) {
 	data := &jsontypes.ChatData{}
 
     	if err := json.Unmarshal([]byte(m), data); err != nil {
-    	    fmt.Printf("Error processing chat message: '%s'", m)
+	    fmt.Printf("Error processing chat message: '%s': %s\n", m, err.Error())
     	}
     	switch data.Type {
     	case "chat":
@@ -155,14 +155,14 @@ func (s *Server) handleMessage(mf msgFormat) {
 		}
 		jsonByte, err := json.Marshal(sg)
 		if err != nil {
-		    fmt.Printf("Fatal: could not produce start game json: %s", err.Error())
+		    fmt.Printf("Fatal: could not produce start game json: %s\n", err.Error())
 		    return
 		}
 		s.sendAllClients(string(jsonByte), -1)
 		s.phase = 1
     	    }
 	default:
-	    fmt.Printf("Error: unknown message type in lobby phase")
+	    fmt.Printf("Error: unknown message type in lobby phase\n")
     	}
     case 1: // game
 	data := &jsontypes.GameData{}
