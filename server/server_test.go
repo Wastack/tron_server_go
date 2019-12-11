@@ -36,12 +36,14 @@ func assertColorFormat(t *testing.T, color string) {
 
 func TestMain(m *testing.M) {
     s := Create()
+    var exitCode int
     go func() {
-	os.Exit(m.Run())
+	exitCode = m.Run()
     }()
     // server should shut down if client's disconnected successfully. No need to
     // shut down server manually.
     s.Start(port)
+    os.Exit(exitCode)
 }
 
 func sendMessage(t *testing.T, c net.Conn, message string) {
