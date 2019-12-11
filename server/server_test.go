@@ -56,15 +56,22 @@ func assertReceive(t *testing.T, c net.Conn, message string) {
     assertEqual(t, strings.TrimSpace(string(resp)), message, "")
 }
 
-func assertStartGameReceived(t *testing.T, c net.Conn, colors []string) {
+func receiveObject(t *testing.T, c net.Conn, jsonData interface{}) {
     data, err := bufio.NewReader(c).ReadString('\n')
     if err != nil {
 	t.Error("Reading from server failed.")
     }
-    startData := &jsontypes.StartGame{}
-    if err := json.Unmarshal([]byte(data), startData); err != nil {
+    c.SetReadDeadline(time.Now().Add(5 * time.Second))
+
+    t.Logf("Unpacking message..")
+    if err := json.Unmarshal([]byte(data), jsonData); err != nil {
 	t.Error("Malformed color message.")
     }
+}
+
+func assertStartGameReceived(t *testing.T, c net.Conn, colors []string) {
+    startData := &jsontypes.StartGame{}
+    receiveObject(t, c, startData)
     assertEqual(t, startData.Type, "start_game", "")
 
     colorsOk := make([]bool, len(colors))
@@ -91,18 +98,8 @@ func TestServerTwoPlayers(t *testing.T) {
     defer conn1.Close()
     conn1.SetReadDeadline(time.Now().Add(5 * time.Second))
     t.Logf("Player 1: receiving color message..")
-    data, err := bufio.NewReader(conn1).ReadString('\n')
-    if err != nil {
-	t.Error("Reading from server failed.")
-    }
-
-    t.Logf("Player 1: message received: '%s'", data)
-    t.Logf("Player 1: unpacking color message..")
-    conn1.SetReadDeadline(time.Now().Add(5 * time.Second))
     jsonData := &jsontypes.ColorData{}
-    if err := json.Unmarshal([]byte(data), jsonData); err != nil {
-	t.Error("Malformed color message.")
-    }
+    receiveObject(t, conn1, jsonData)
     color1 := jsonData.Color
     assertEqual(t, jsonData.Type, "connect", "Malformed message type")
     t.Logf("Player 1: color: %s", color1)
@@ -116,24 +113,15 @@ func TestServerTwoPlayers(t *testing.T) {
     conn2.SetReadDeadline(time.Now().Add(5 * time.Second))
     defer conn2.Close()
 
-    // read color for player 2
-    data, err = bufio.NewReader(conn2).ReadString('\n')
-    if err != nil {
-	t.Error("Player 2: Reading from server failed.")
-    }
-    t.Logf("Player 2: Message received: '%s'", data)
-
+    receiveObject(t, conn2, jsonData)
     // Ignore player connected message
     t.Logf("Player 1: Ignore connection received message")
     bufio.NewReader(conn1).ReadString('\n')
 
-    t.Logf("Player 2: Unpacking color message..")
-    conn2.SetReadDeadline(time.Now().Add(5 * time.Second))
-    jsonData = &jsontypes.ColorData{}
-    if err := json.Unmarshal([]byte(data), jsonData); err != nil {
-	t.Error("Player 2: Malformed color message.")
-    }
     color2 := jsonData.Color
+    if color1 == color2 {
+	t.Error("Player 2: Received the same color as player 1")
+    }
     t.Logf("Player 2: Color: '%s'", color2)
     assertEqual(t, jsonData.Type, "connect", "Malformed message type")
     assertColorFormat(t, color2)
