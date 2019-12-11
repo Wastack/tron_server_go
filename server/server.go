@@ -254,7 +254,8 @@ func (s *Server) handleConnect(c net.Conn) {
     for {
     	netData, err := bufio.NewReader(c).ReadString('\n')
     	if err != nil {
-    	    fmt.Printf("Error while reading from player: %s with Id: %d\n", p.color, p.id)
+	    fmt.Printf("Error while reading from player: %s with Id %d: %s\n",
+		p.color, p.id, err.Error())
 	    break
     	}
 	s.msgs <- msgFormat{p.id, netData}
