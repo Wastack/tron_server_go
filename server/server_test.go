@@ -145,8 +145,24 @@ func TestServerTwoPlayers(t *testing.T) {
     assertStartGameReceived(t, conn1, colors)
     assertStartGameReceived(t, conn2, colors)
 
-    // TODO "press enter" to initiate game start
-    // TODO assert ticking
-    // TODO assert direction change
+    t.Logf("Player 1: indicate start game")
+    sendMessage(t, conn1, `{"type":"start"}`)
+    // both connections receive ticks from now on. Let's assert for one.
+    jsonTick := &jsontypes.SimpleData{}
+    t.Logf("Player 1: Receive tick")
+    receiveObject(t, conn1, jsonTick)
+    assertEqual(t, jsonTick.Type, "tick", "")
+    t.Logf("Player 2: Receive tick")
+    receiveObject(t, conn2, jsonTick)
+    assertEqual(t, jsonTick.Type, "tick", "")
+
 }
+
+// Server should not listen to new connections given game phase alredy started
+func TestServerListeningGamePhase(t *testing.T) {
+    // TODO
+}
+
+// TODO test direction change
+// TODO test multiple players
 
